@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Star Runway — Orbital Flight</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2302030a'/%3E%3Cpath d='M16 4 L20 18 L16 15 L12 18 Z' fill='%23ffc233'/%3E%3Ccircle cx='16' cy='24' r='3' fill='%2366ccff'/%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #02030a; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #eef1f5; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hud { position: fixed; z-index: 5; user-select: none; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  /* top-left menu */
+  #menu { top: 12px; left: 12px; display: flex; gap: 8px; }
+  .menu-btn { background: rgba(21,26,38,.88); border: 1px solid #3a4358; border-radius: 10px; padding: 9px 14px; font-size: 14px; font-weight: 600; }
+  .menu-btn:hover { background: rgba(48,58,84,.92); }
+  /* top-centre progress */
+  #progress-wrap { top: 10px; left: 50%; transform: translateX(-50%); text-align: center; width: min(560px, 52vw); }
+  #progress { display: flex; list-style: none; margin: 0; padding: 0; gap: 4px; }
+  #progress li { flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.18); }
+  #progress li.active { background: #ffc233; }
+  #stage-label { font-size: 12px; letter-spacing: .14em; color: #ffc233; margin-top: 5px; font-weight: 700; }
+  /* readouts under the progress bar */
+  #readouts { top: 62px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+  .readout { background: rgba(10,14,24,.78); border: 1px solid #3a4358; border-radius: 10px; padding: 7px 12px; text-align: center; min-width: 74px; }
+  .readout .lbl { font-size: 10px; letter-spacing: .12em; color: #9aa3b5; }
+  .readout .val { font-size: 19px; font-weight: 700; }
+  .readout .val small { font-size: 11px; color: #9aa3b5; font-weight: 400; }
+  /* top-right money */
+  #wallet { top: 12px; right: 12px; display: flex; gap: 8px; align-items: center; }
+  .pill { background: rgba(21,26,38,.88); border: 1px solid #3a4358; border-radius: 10px; padding: 9px 14px; font-weight: 700; font-size: 14px; }
+  /* bottom-right minimap */
+  #minimap { bottom: 12px; right: 12px; width: 180px; height: 180px; border: 1px solid #3a4358; border-radius: 12px; background: rgba(10,14,24,.6); }
+  /* bottom-left joystick */
+  #joystick { bottom: 16px; left: 16px; width: 110px; height: 110px; border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.28); }
+  #joy-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,.75); transform: translate(-50%, -50%); }
+  #joy-label { position: absolute; bottom: -18px; left: 0; right: 0; text-align: center; font-size: 11px; letter-spacing: .14em; color: #9aa3b5; }
+  /* bottom-centre buttons */
+  #controls { bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+  .ctl-btn { background: rgba(21,26,38,.88); border: 1px solid #3a4358; border-radius: 10px; padding: 10px 16px; font-weight: 700; font-size: 14px; }
+  .ctl-btn:hover { background: rgba(48,58,84,.92); }
+  /* centre popup */
+  #popup { top: 38%; left: 50%; transform: translate(-50%, -50%) scale(.9); font-size: 44px; font-weight: 800; color: #ffc233; text-shadow: 0 2px 18px rgba(0,0,0,.7); opacity: 0; transition: opacity .18s, transform .18s; pointer-events: none; }
+  #popup.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  /* panels */
+  .panel { position: fixed; z-index: 8; top: 60px; left: 12px; width: 320px; max-width: 86vw; background: rgba(15,19,30,.96); border: 1px solid #3a4358; border-radius: 14px; padding: 16px 18px; display: none; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .panel.open { display: block; }
+  .panel h2 { margin: 0 0 8px; font-size: 18px; }
+  .panel p { margin: 6px 0; font-size: 14px; line-height: 1.5; color: #cfd6e2; }
+  .panel-close { position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 20px; color: #9aa3b5; }
+  .panel .action { margin-top: 10px; background: #ffc233; color: #1a1405; border: none; border-radius: 9px; padding: 9px 14px; font-weight: 700; }
+  .panel .action:disabled { background: #3a4358; color: #9aa3b5; cursor: default; }
+  .panel .note { font-size: 13px; color: #9aa3b5; min-height: 18px; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+  .swatch { background: var(--sw, #888); color: #0a0d14; border: 2px solid rgba(255,255,255,.5); border-radius: 8px; padding: 8px 10px; font-weight: 700; font-size: 13px; }
+  #panel-missions li { margin: 5px 0; font-size: 14px; color: #cfd6e2; list-style: none; }
+  #panel-missions li::before { content: "○ "; color: #9aa3b5; }
+  #panel-missions li.done { color: #39d353; }
+  #panel-missions li.done::before { content: "● "; color: #39d353; }
+  /* overlays */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; background: rgba(2,3,10,.55); }
+  .overlay.open, .overlay.show { display: flex; }
+  .card { background: rgba(15,19,30,.94); border: 1px solid #3a4358; border-radius: 18px; padding: 30px 36px; text-align: center; max-width: 520px; box-shadow: 0 16px 60px rgba(0,0,0,.6); }
+  .card h1 { margin: 0 0 4px; font-size: 34px; letter-spacing: .02em; }
+  .card h1 .star { color: #ffc233; }
+  .card .sub { color: #9aa3b5; margin: 0 0 18px; font-size: 15px; }
+  .card .keys { text-align: left; font-size: 14px; line-height: 1.9; color: #cfd6e2; display: inline-block; margin-bottom: 20px; }
+  .card .keys b { color: #ffc233; }
+  .big-btn { background: #ffc233; color: #1a1405; border: none; border-radius: 12px; padding: 13px 30px; font-size: 17px; font-weight: 800; }
+  .big-btn:hover { filter: brightness(1.08); }
+  .card .pay { text-align: left; font-size: 15px; line-height: 1.9; color: #cfd6e2; margin: 10px 0 18px; }
+  .card .pay b { color: #eef1f5; }
+  #end-total { font-size: 18px; font-weight: 800; color: #39d353; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Star Runway: launch from the station, fly three rings and land back on the deck"></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+
+<div class="hud" id="menu">
+  <button class="menu-btn" id="btn-hangar">🚀 Hangar</button>
+  <button class="menu-btn" id="btn-shop">🛒 Shop</button>
+  <button class="menu-btn" id="btn-jobs">💼 Jobs</button>
+  <button class="menu-btn" id="btn-missions">🎯 Missions</button>
+</div>
+
+<div class="hud" id="progress-wrap">
+  <ul id="progress"><li></li><li></li><li></li><li></li><li></li><li></li></ul>
+  <div id="stage-label">TAXI</div>
+</div>
+
+<div class="hud" id="readouts">
+  <div class="readout"><div class="lbl">ALTITUDE</div><div class="val" id="hud-alt">0 <small>m</small></div></div>
+  <div class="readout"><div class="lbl">SPEED</div><div class="val" id="hud-speed">0 <small>kt</small></div></div>
+  <div class="readout"><div class="lbl">HEADING</div><div class="val" id="hud-heading">0°</div></div>
+  <div class="readout"><div class="lbl">VERT SPEED</div><div class="val" id="hud-vert">0.0 <small>m/s</small></div></div>
+  <div class="readout"><div class="lbl">FLAPS</div><div class="val" id="hud-flaps">0</div></div>
+  <div class="readout"><div class="lbl">SPOILERS</div><div class="val" id="hud-spoilers">0</div></div>
+</div>
+
+<div class="hud" id="wallet">
+  <div class="pill" id="money">$1,000</div>
+  <div class="pill" id="xp">0 XP</div>
+</div>
+
+<canvas class="hud" id="minimap" width="180" height="180"></canvas>
+
+<div class="hud" id="joystick"><div id="joy-knob"></div><div id="joy-label">DRAG TO FLY</div></div>
+
+<div class="hud" id="controls">
+  <button class="ctl-btn" id="btn-exit">✕ Exit</button>
+  <button class="ctl-btn" id="btn-flaps">FLAPS 0/3</button>
+  <button class="ctl-btn" id="btn-spoilers">SPOILERS 0/2</button>
+</div>
+
+<div class="hud" id="popup"></div>
+
+<div class="panel" id="panel-hangar">
+  <button class="panel-close" aria-label="Close">✕</button>
+  <h2>🚀 Hangar</h2>
+  <p>Your ship, the <b>StarRunner</b>. Pick a paint scheme — it recolours the hull and accents right away.</p>
+  <div class="swatches"></div>
+  <p class="note" id="hangar-note">Pearl white with solar-orange accents, as delivered.</p>
+</div>
+
+<div class="panel" id="panel-shop">
+  <button class="panel-close" aria-label="Close">✕</button>
+  <h2>🛒 Shop</h2>
+  <p id="shop-cost">Engine Mk 1 — $400</p>
+  <p class="note" id="shop-note"></p>
+  <button class="action" id="shop-buy">Buy upgrade</button>
+</div>
+
+<div class="panel" id="panel-jobs">
+  <button class="panel-close" aria-label="Close">✕</button>
+  <h2>💼 Jobs</h2>
+  <p><b>Orbital Delivery</b> — launch from Aurora Station, fly the 3 gold rings, land back on the deck. Pay <b>$250</b> + <b>$100 per ring</b> + smooth-landing bonus.</p>
+  <button class="action" id="job-accept">Accept job</button>
+  <p class="note" id="job-note"></p>
+</div>
+
+<div class="panel" id="panel-missions">
+  <button class="panel-close" aria-label="Close">✕</button>
+  <h2>🎯 Missions</h2>
+  <ul>
+    <li>Start the engine (E)</li>
+    <li>Fly through ring 1</li>
+    <li>Fly through all 3 rings</li>
+    <li>Land back on the deck</li>
+  </ul>
+</div>
+
+<div class="overlay open" id="title-overlay">
+  <div class="card">
+    <h1><span class="star">★</span> STAR RUNWAY <span class="star">★</span></h1>
+    <p class="sub">Orbital Flight — launch from Aurora Station, thread the rings, come home.</p>
+    <div class="keys">
+      <b>W / S</b> throttle &nbsp;·&nbsp; <b>← →</b> steer &nbsp;·&nbsp; <b>↑ ↓</b> climb / dive<br>
+      <b>E</b> engine &nbsp;·&nbsp; <b>F</b> flaps &nbsp;·&nbsp; <b>G</b> spoilers &nbsp;·&nbsp; <b>L</b> gear<br>
+      <b>Space</b> brake &nbsp;·&nbsp; <b>R</b> reverse thrust &nbsp;·&nbsp; drag the joystick to fly
+    </div>
+    <br>
+    <button class="big-btn" id="btn-fly">Press ENTER to fly</button>
+  </div>
+</div>
+
+<div class="overlay" id="end-overlay">
+  <div class="card">
+    <h1>🛬 LANDED</h1>
+    <p class="sub">Orbital Delivery complete — welcome home to Aurora Station.</p>
+    <div class="pay">
+      <div id="end-job">Orbital Delivery — $250</div>
+      <div id="end-rings">3 / 3 rings — $300</div>
+      <div id="end-bonus">Smooth landing bonus — $50</div>
+    </div>
+    <div id="end-total">Total earned: $600 · +150 XP</div>
+    <button class="big-btn" id="btn-again">Fly again</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
